@@ -1,0 +1,59 @@
+export interface SubtitleCue {
+  start: number; // seconds
+  end: number;
+  text: string;
+  translation?: string;
+}
+
+export interface CaptionTrack {
+  baseUrl: string;
+  languageCode: string;
+  name: { simpleText: string };
+}
+
+export interface DictionaryEntry {
+  word: string;
+  phonetic?: string;
+  meanings: {
+    partOfSpeech: string;
+    definitions: { definition: string; example?: string }[];
+  }[];
+}
+
+export interface Card {
+  id: string;
+  front: string;
+  back: string;
+  createdAt: number;
+}
+
+export interface Collection {
+  id: string;
+  title: string;
+  description: string;
+  cards: Card[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// Message types between content script and background
+export type MessageRequest =
+  | { type: "FETCH_SUBTITLES"; url: string; videoId: string }
+  | { type: "TRANSLATE"; texts: string[]; videoId: string; lang: string }
+  | { type: "LOOKUP_WORD"; word: string }
+  | { type: "SAVE_CARD"; collectionId: string; front: string; back: string }
+  | { type: "GET_COLLECTIONS" }
+  | { type: "CREATE_COLLECTION"; title: string }
+  | { type: "GET_AUTH_STATE" }
+  | { type: "LOGIN"; email: string; password: string }
+  | { type: "LOGOUT" };
+
+export type MessageResponse =
+  | { success: true; data: unknown }
+  | { success: false; error: string };
