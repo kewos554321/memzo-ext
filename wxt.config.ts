@@ -5,7 +5,7 @@ export default defineConfig({
   srcDir: "src",
   modules: ["@wxt-dev/module-react"],
   manifest: {
-    name: "Memzo YouTube",
+    name: process.env.NODE_ENV === "development" ? "Memzo YouTube [DEV]" : "Memzo YouTube",
     description: "Bilingual subtitles & vocabulary builder for YouTube",
     permissions: ["storage"],
     host_permissions: [

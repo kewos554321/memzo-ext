@@ -68,7 +68,22 @@ export function useSubtitles(videoId: string | null) {
 }
 
 function extractCaptionTracks(): CaptionTrack[] {
-  // Try extracting from ytInitialPlayerResponse in page scripts
+  // First: try YouTube player DOM API (works for both direct load and SPA navigation)
+  try {
+    const player = document.querySelector("#movie_player") as Record<string, unknown> | null;
+    if (typeof player?.getPlayerResponse === "function") {
+      const response = (player.getPlayerResponse as () => Record<string, unknown>)();
+      const tracks = (response?.captions as Record<string, unknown>)
+        ?.playerCaptionsTracklistRenderer as Record<string, unknown>;
+      if (tracks?.captionTracks) {
+        return tracks.captionTracks as CaptionTrack[];
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fallback: try extracting from ytInitialPlayerResponse in page scripts (direct load)
   const scripts = document.querySelectorAll("script");
   for (const script of scripts) {
     const text = script.textContent || "";
@@ -87,16 +102,14 @@ function extractCaptionTracks(): CaptionTrack[] {
     }
   }
 
-  // Fallback: try to find it in yt.config_ or ytplayer.config
+  // Fallback: captured via fetch hook on SPA navigation
   try {
-    const player = (window as Record<string, unknown>).__memzo_player_response;
-    if (player) {
-      return (
-        (player as Record<string, unknown>)?.captions as Record<
-          string,
-          unknown
-        >
-      )?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    const w = window as unknown as Record<string, unknown>;
+    const playerResponse = w.__memzo_player_response as Record<string, unknown> | undefined;
+    if (playerResponse) {
+      const captions = playerResponse.captions as Record<string, unknown> | undefined;
+      const trackList = captions?.playerCaptionsTracklistRenderer as Record<string, unknown> | undefined;
+      return (trackList?.captionTracks as CaptionTrack[]) || [];
     }
   } catch {
     // ignore
