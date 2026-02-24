@@ -30,14 +30,29 @@ export default defineContentScript({
       return url.searchParams.get("v");
     }
 
+    function hideYtCaptions() {
+      if (!document.getElementById("memzo-hide-captions")) {
+        const style = document.createElement("style");
+        style.id = "memzo-hide-captions";
+        style.textContent =
+          ".ytp-caption-window-container { display: none !important; }";
+        document.head.appendChild(style);
+      }
+    }
+
+    function restoreYtCaptions() {
+      document.getElementById("memzo-hide-captions")?.remove();
+    }
+
     async function handleNavigation() {
       const videoId = getVideoId();
       if (!videoId || videoId === currentVideoId) return;
 
-      // Remove existing UI
+      // Remove existing UI and restore YT captions
       if (ui) {
         ui.remove();
         ui = null;
+        restoreYtCaptions();
       }
 
       currentVideoId = videoId;
@@ -47,6 +62,7 @@ export default defineContentScript({
 
       ui = await createUI(videoId);
       ui.mount();
+      hideYtCaptions();
     }
 
     // Initial load

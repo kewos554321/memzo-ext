@@ -9,10 +9,13 @@ interface YouTubeTimedText {
 }
 
 export async function fetchSubtitles(url: string): Promise<SubtitleCue[]> {
+  // YouTube baseUrl uses HTML entities (&amp;) — decode before use
+  const decodedUrl = url.replace(/&amp;/g, "&");
+
   // Ensure we request JSON format
-  const jsonUrl = url.includes("fmt=json3")
-    ? url
-    : `${url}&fmt=json3`;
+  const jsonUrl = decodedUrl.includes("fmt=json3")
+    ? decodedUrl
+    : `${decodedUrl}&fmt=json3`;
 
   const res = await fetch(jsonUrl);
   if (!res.ok) throw new Error(`Failed to fetch subtitles: ${res.status}`);
