@@ -14,6 +14,10 @@ interface WordSpanProps {
 let statusMap: Record<string, WordStatus> = {};
 let statusLoaded = false;
 
+// Module-level: tracks the hide function of the currently visible tooltip
+// so entering a new word immediately hides the previous one
+let globalHideTooltip: (() => void) | null = null;
+
 async function loadStatuses() {
   if (statusLoaded) return;
   statusLoaded = true;
@@ -39,6 +43,7 @@ export function WordSpan({ word, collections, selectedCollectionId }: WordSpanPr
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<WordStatus | null>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
+  const showTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const isWord = /^[a-zA-Z'-]+$/.test(word);
@@ -52,18 +57,33 @@ export function WordSpan({ word, collections, selectedCollectionId }: WordSpanPr
     });
   }, [word, isWord]);
 
-  async function handleMouseEnter() {
+  function handleMouseEnter() {
     if (!isWord) return;
     clearTimeout(hideTimerRef.current);
-    setShowTooltip(true);
-    if (entry === undefined) {
-      const res = await sendMessage({ type: "LOOKUP_WORD", word });
-      setEntry(res.success ? (res.data as DictionaryEntry | null) : null);
-    }
+
+    // Hover-intent: only show after cursor rests for 200ms
+    showTimerRef.current = setTimeout(async () => {
+      // Immediately hide any other visible tooltip
+      if (globalHideTooltip) {
+        globalHideTooltip();
+        globalHideTooltip = null;
+      }
+      globalHideTooltip = () => setShowTooltip(false);
+
+      setShowTooltip(true);
+      if (entry === undefined) {
+        const res = await sendMessage({ type: "LOOKUP_WORD", word });
+        setEntry(res.success ? (res.data as DictionaryEntry | null) : null);
+      }
+    }, 200);
   }
 
   function handleMouseLeave() {
-    hideTimerRef.current = setTimeout(() => setShowTooltip(false), 250);
+    clearTimeout(showTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setShowTooltip(false);
+      globalHideTooltip = null;
+    }, 80);
   }
 
   async function handleStatusChange(next: WordStatus | null) {
@@ -123,8 +143,8 @@ export function WordSpan({ word, collections, selectedCollectionId }: WordSpanPr
           canSave={!!selectedCollectionId}
           onStatusChange={handleStatusChange}
           onSave={handleSave}
-          onMouseEnter={() => clearTimeout(hideTimerRef.current)}
-          onMouseLeave={() => setShowTooltip(false)}
+          onMouseEnter={() => { clearTimeout(showTimerRef.current); clearTimeout(hideTimerRef.current); }}
+          onMouseLeave={() => { setShowTooltip(false); globalHideTooltip = null; }}
         />
       )}
     </span>
