@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import type { SubtitleCue, Collection } from "@/lib/types";
-import { useVideoTime } from "../hooks/useVideoTime";
-import { useSubtitles } from "../hooks/useSubtitles";
+import type { Collection } from "@/lib/types";
+import { useCaptionMirror } from "../hooks/useCaptionMirror";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { WordSpan } from "./WordSpan";
@@ -11,13 +10,21 @@ interface SubtitleOverlayProps {
 }
 
 export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
-  const currentTime = useVideoTime();
-  const { cues, loading, error } = useSubtitles(videoId);
+  const { text, translation } = useCaptionMirror(videoId);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollectionId, setSelectedDeckId] = useState<string | null>(null);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [visible, setVisible] = useState(true);
 
-  // Load collections and selected deck
+  // Listen for toolbar pill toggle
+  useEffect(() => {
+    function handler(e: Event) {
+      setVisible((e as CustomEvent<{ visible: boolean }>).detail.visible);
+    }
+    window.addEventListener("memzo:toggle", handler);
+    return () => window.removeEventListener("memzo:toggle", handler);
+  }, []);
+
+  // Load collections
   useEffect(() => {
     async function load() {
       const authRes = await sendMessage({ type: "GET_AUTH_STATE" });
@@ -26,116 +33,56 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
       if (!token) return;
 
       const colRes = await sendMessage({ type: "GET_COLLECTIONS" });
-      if (colRes.success) {
-        setCollections(colRes.data as Collection[]);
-      }
+      if (colRes.success) setCollections(colRes.data as Collection[]);
 
-      const savedCollection = await storage.getItem<string>(
+      const saved = await storage.getItem<string>(
         `local:${STORAGE_KEYS.SELECTED_COLLECTION}`
       );
-      if (savedCollection) setSelectedDeckId(savedCollection);
+      if (saved) setSelectedCollectionId(saved);
     }
     load();
   }, []);
 
-  // Find current cue
-  const activeCue = cues.find(
-    (c) => currentTime >= c.start && currentTime < c.end
-  );
-
-  if (!visible) {
-    return (
-      <button
-        onClick={() => setVisible(true)}
-        style={{
-          position: "absolute",
-          bottom: "80px",
-          right: "16px",
-          background: "rgba(0,0,0,0.6)",
-          color: "#fff",
-          border: "none",
-          borderRadius: "4px",
-          padding: "4px 8px",
-          fontSize: "12px",
-          cursor: "pointer",
-          zIndex: 99999,
-        }}
-      >
-        CC
-      </button>
-    );
-  }
+  if (!visible || !text) return null;
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: "80px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 99999,
-        pointerEvents: "auto",
-        textAlign: "center",
-        maxWidth: "80%",
-      }}
-    >
-      {/* Toggle button */}
-      <button
-        onClick={() => setVisible(false)}
-        style={{
-          position: "absolute",
-          top: "-28px",
-          right: "-12px",
-          background: "rgba(0,0,0,0.5)",
-          color: "#fff",
-          border: "none",
-          borderRadius: "50%",
-          width: "22px",
-          height: "22px",
-          fontSize: "12px",
-          cursor: "pointer",
-          lineHeight: "22px",
-        }}
-      >
-        ×
-      </button>
-
-      {loading && (
-        <div style={subtitleStyle}>Loading subtitles...</div>
-      )}
-      {error && (
-        <div style={subtitleStyle}>{error}</div>
-      )}
-
-      {activeCue && (
-        <div style={subtitleStyle}>
-          {/* English line - hoverable words */}
-          <div style={{ marginBottom: "4px", fontSize: "18px" }}>
-            {splitIntoWords(activeCue.text).map((part, i) => (
-              <span key={i}>
-                {part === " " ? (
-                  " "
-                ) : (
-                  <WordSpan
-                    word={part}
-                    collections={collections}
-                    selectedCollectionId={selectedCollectionId}
-                  />
-                )}
-              </span>
-            ))}
-          </div>
-          {/* Chinese translation */}
-          {activeCue.translation && (
-            <div style={{ fontSize: "16px", color: "#f9e2af" }}>
-              {activeCue.translation}
-            </div>
+    <div style={outerStyle}>
+      <div style={subtitleStyle}>
+        {/* English — hoverable words */}
+        <div style={{ marginBottom: "4px", fontSize: "18px" }}>
+          {splitIntoWords(text).map((part, i) =>
+            part === " " ? (
+              <span key={i}> </span>
+            ) : (
+              <WordSpan
+                key={i}
+                word={part}
+                collections={collections}
+                selectedCollectionId={selectedCollectionId}
+              />
+            )
           )}
         </div>
-      )}
+
+        {/* Chinese translation */}
+        {translation && (
+          <div style={{ fontSize: "16px", color: "#f9e2af" }}>{translation}</div>
+        )}
+      </div>
     </div>
   );
 }
+
+const outerStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: "80px",
+  left: "50%",
+  transform: "translateX(-50%)",
+  zIndex: 2001,
+  pointerEvents: "none",
+  textAlign: "center",
+  maxWidth: "80%",
+};
 
 const subtitleStyle: React.CSSProperties = {
   background: "rgba(0, 0, 0, 0.75)",
@@ -145,9 +92,9 @@ const subtitleStyle: React.CSSProperties = {
   fontFamily: "'Segoe UI', Arial, sans-serif",
   lineHeight: "1.6",
   backdropFilter: "blur(4px)",
+  pointerEvents: "auto",
 };
 
 function splitIntoWords(text: string): string[] {
-  // Split while preserving spaces as separate items
   return text.split(/(\s+)/).filter((s) => s.length > 0);
 }

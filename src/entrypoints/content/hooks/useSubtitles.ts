@@ -13,8 +13,11 @@ export function useSubtitles(videoId: string | null) {
     setError(null);
 
     try {
-      // Extract caption tracks from page
-      const tracks = extractCaptionTracks();
+      // Extract caption tracks; if not ready yet, wait for page script signal
+      let tracks = extractCaptionTracks();
+      if (!tracks || tracks.length === 0) {
+        tracks = await waitForCaptionTracks(6000);
+      }
       if (!tracks || tracks.length === 0) {
         setError("No captions available");
         setLoading(false);
@@ -67,53 +70,41 @@ export function useSubtitles(videoId: string | null) {
   return { cues, loading, error, reload: loadSubtitles };
 }
 
+/** Read caption tracks stored in DOM dataset by the injected page script */
 function extractCaptionTracks(): CaptionTrack[] {
-  // First: try YouTube player DOM API (works for both direct load and SPA navigation)
   try {
-    const player = document.querySelector("#movie_player") as Record<string, unknown> | null;
-    if (typeof player?.getPlayerResponse === "function") {
-      const response = (player.getPlayerResponse as () => Record<string, unknown>)();
-      const tracks = (response?.captions as Record<string, unknown>)
-        ?.playerCaptionsTracklistRenderer as Record<string, unknown>;
-      if (tracks?.captionTracks) {
-        return tracks.captionTracks as CaptionTrack[];
-      }
+    const stored = document.documentElement.dataset.memzoCaptionTracks;
+    if (stored) {
+      const parsed = JSON.parse(stored) as CaptionTrack[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {
     // ignore
   }
-
-  // Fallback: try extracting from ytInitialPlayerResponse in page scripts (direct load)
-  const scripts = document.querySelectorAll("script");
-  for (const script of scripts) {
-    const text = script.textContent || "";
-    const match = text.match(
-      /ytInitialPlayerResponse\s*=\s*(\{.+?\});/s
-    );
-    if (match) {
-      try {
-        const data = JSON.parse(match[1]);
-        return (
-          data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || []
-        );
-      } catch {
-        continue;
-      }
-    }
-  }
-
-  // Fallback: captured via fetch hook on SPA navigation
-  try {
-    const w = window as unknown as Record<string, unknown>;
-    const playerResponse = w.__memzo_player_response as Record<string, unknown> | undefined;
-    if (playerResponse) {
-      const captions = playerResponse.captions as Record<string, unknown> | undefined;
-      const trackList = captions?.playerCaptionsTracklistRenderer as Record<string, unknown> | undefined;
-      return (trackList?.captionTracks as CaptionTrack[]) || [];
-    }
-  } catch {
-    // ignore
-  }
-
   return [];
+}
+
+/**
+ * Wait up to `timeout` ms for the page script to store caption tracks.
+ * Resolves immediately if already available, otherwise waits for
+ * the `memzo:tracks-ready` CustomEvent dispatched on `document`.
+ */
+function waitForCaptionTracks(timeout: number): Promise<CaptionTrack[]> {
+  return new Promise((resolve) => {
+    const immediate = extractCaptionTracks();
+    if (immediate.length > 0) { resolve(immediate); return; }
+
+    const handler = () => {
+      clearTimeout(timer);
+      document.removeEventListener("memzo:tracks-ready", handler);
+      resolve(extractCaptionTracks());
+    };
+
+    document.addEventListener("memzo:tracks-ready", handler);
+
+    const timer = setTimeout(() => {
+      document.removeEventListener("memzo:tracks-ready", handler);
+      resolve([]);
+    }, timeout);
+  });
 }

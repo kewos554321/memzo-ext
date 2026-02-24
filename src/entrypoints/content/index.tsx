@@ -1,5 +1,6 @@
 import ReactDOM from "react-dom/client";
 import { SubtitleOverlay } from "./components/SubtitleOverlay";
+import { ToolbarPill } from "./components/ToolbarPill";
 
 export default defineContentScript({
   matches: ["*://www.youtube.com/*"],
@@ -7,14 +8,24 @@ export default defineContentScript({
 
   async main(ctx) {
     let currentVideoId: string | null = null;
-    let ui: Awaited<ReturnType<typeof createUI>> | null = null;
+    let subtitleUi: Awaited<ReturnType<typeof createShadowRootUi>> | null = null;
+    let toolbarUi: { remove(): void } | null = null;
 
-    async function createUI(videoId: string) {
+    async function createSubtitleUI(videoId: string) {
       return createShadowRootUi(ctx, {
         name: "memzo-subtitles",
         position: "inline",
         anchor: "#movie_player",
         onMount(container) {
+          // Host must cover the full player so position:absolute children
+          // are placed relative to #movie_player's coordinate space
+          const shadowRoot = container.getRootNode() as ShadowRoot;
+          const host = shadowRoot.host as HTMLElement;
+          host.style.cssText =
+            "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2000;";
+          container.style.cssText =
+            "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;";
+
           const root = ReactDOM.createRoot(container);
           root.render(<SubtitleOverlay videoId={videoId} />);
           return root;
@@ -23,6 +34,28 @@ export default defineContentScript({
           root?.unmount();
         },
       });
+    }
+
+    async function createToolbarUI() {
+      await waitForElement(".ytp-right-controls");
+      const rightControls = document.querySelector(".ytp-right-controls")!;
+
+      // Direct DOM injection — prepend pill as first child of right controls
+      const host = document.createElement("div");
+      host.id = "memzo-toolbar-host";
+      host.style.cssText =
+        "display:inline-flex;align-items:center;height:100%;vertical-align:middle;";
+      rightControls.prepend(host);
+
+      const root = ReactDOM.createRoot(host);
+      root.render(<ToolbarPill />);
+
+      return {
+        remove() {
+          root.unmount();
+          host.remove();
+        },
+      };
     }
 
     function getVideoId(): string | null {
@@ -48,22 +81,36 @@ export default defineContentScript({
       const videoId = getVideoId();
       if (!videoId || videoId === currentVideoId) return;
 
-      // Remove existing UI and restore YT captions
-      if (ui) {
-        ui.remove();
-        ui = null;
-        restoreYtCaptions();
-      }
+      // Teardown existing UIs
+      if (subtitleUi) { subtitleUi.remove(); subtitleUi = null; }
+      if (toolbarUi) { toolbarUi.remove(); toolbarUi = null; }
+      restoreYtCaptions();
 
       currentVideoId = videoId;
 
-      // Wait for player to be ready
+      // Wait for player + right controls to be ready
       await waitForElement("#movie_player");
+      await waitForElement(".ytp-right-controls");
 
-      ui = await createUI(videoId);
-      ui.mount();
+      subtitleUi = await createSubtitleUI(videoId);
+      subtitleUi.mount();
+
+      toolbarUi = await createToolbarUI();
+
       hideYtCaptions();
     }
+
+    // Sync CC with Memzo subtitle toggle
+    window.addEventListener("memzo:toggle", (e) => {
+      const { visible } = (e as CustomEvent<{ visible: boolean }>).detail;
+      if (visible) {
+        hideYtCaptions();
+        document.dispatchEvent(new CustomEvent("memzo:cc-enable"));
+      } else {
+        restoreYtCaptions();
+        document.dispatchEvent(new CustomEvent("memzo:cc-disable"));
+      }
+    });
 
     // Initial load
     handleNavigation();
@@ -83,27 +130,74 @@ export default defineContentScript({
       handleNavigation();
     });
 
-    // Inject a script to capture ytInitialPlayerResponse before it's consumed
+    // Inject into page world (isolated from content script).
+    // Communication back uses document.documentElement.dataset + CustomEvent
+    // — both are shared across JS worlds.
     const script = document.createElement("script");
     script.textContent = `
-      if (typeof ytInitialPlayerResponse !== 'undefined') {
-        window.__memzo_player_response = ytInitialPlayerResponse;
-      }
-      // Hook into the fetch to capture player responses on SPA navigation
-      const _origFetch = window.fetch;
-      window.fetch = async function(...args) {
-        const res = await _origFetch.apply(this, args);
-        try {
-          const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-          if (url && url.includes('/youtubei/v1/player')) {
-            const clone = res.clone();
-            clone.json().then(data => {
-              window.__memzo_player_response = data;
-            }).catch(() => {});
+      (function() {
+        // Enable CC in the YT player — retry until player API is ready
+        function memzoEnableCC(tracks) {
+          var player = document.querySelector('#movie_player');
+          if (player && typeof player.setOption === 'function') {
+            try {
+              var enTrack =
+                tracks.find(function(t){ return t.languageCode === 'en'; }) ||
+                tracks.find(function(t){ return t.languageCode && t.languageCode.startsWith('en'); }) ||
+                tracks[0];
+              if (enTrack) {
+                player.setOption('captions', 'track', enTrack);
+                return;
+              }
+            } catch(e) {}
           }
-        } catch(e) {}
-        return res;
-      };
+          setTimeout(function(){ memzoEnableCC(tracks); }, 600);
+        }
+
+        function memzoStoreTracks(data) {
+          var tracks = data &&
+            data.captions &&
+            data.captions.playerCaptionsTracklistRenderer &&
+            data.captions.playerCaptionsTracklistRenderer.captionTracks;
+          if (tracks && tracks.length) {
+            document.documentElement.dataset.memzoCaptionTracks = JSON.stringify(tracks);
+            document.dispatchEvent(new CustomEvent('memzo:tracks-ready'));
+            memzoEnableCC(tracks);
+          }
+        }
+
+        // Listen for content script requesting CC on/off
+        document.addEventListener('memzo:cc-enable', function() {
+          var stored = document.documentElement.dataset.memzoCaptionTracks;
+          if (stored) { try { memzoEnableCC(JSON.parse(stored)); } catch(e) {} }
+        });
+        document.addEventListener('memzo:cc-disable', function() {
+          var player = document.querySelector('#movie_player');
+          if (player && typeof player.setOption === 'function') {
+            try { player.setOption('captions', 'track', {}); } catch(e) {}
+          }
+        });
+
+        // Initial page load
+        if (typeof ytInitialPlayerResponse !== 'undefined') {
+          memzoStoreTracks(ytInitialPlayerResponse);
+        }
+
+        // SPA navigation: hook fetch to capture new player responses
+        var _origFetch = window.fetch;
+        window.fetch = function() {
+          var args = arguments;
+          return _origFetch.apply(this, args).then(function(res) {
+            try {
+              var url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url);
+              if (url && url.includes('/youtubei/v1/player')) {
+                res.clone().json().then(memzoStoreTracks).catch(function(){});
+              }
+            } catch(e) {}
+            return res;
+          });
+        };
+      })();
     `;
     document.documentElement.appendChild(script);
     script.remove();
