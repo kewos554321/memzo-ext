@@ -20,11 +20,15 @@ export async function lookupWord(
     const data = await res.json();
     const entry = data[0];
 
+    const audioPhonetic = entry.phonetics?.find(
+      (p: { text?: string; audio?: string }) => p.audio
+    );
     const result: DictionaryEntry = {
       word: entry.word,
       phonetic:
         entry.phonetic ||
         entry.phonetics?.find((p: { text?: string }) => p.text)?.text,
+      audioUrl: audioPhonetic?.audio || undefined,
       meanings: entry.meanings.map(
         (m: {
           partOfSpeech: string;

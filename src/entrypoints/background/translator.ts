@@ -33,15 +33,19 @@ export async function translateTexts(
 ): Promise<string[]> {
   const cacheKey = `local:${STORAGE_KEYS.SUBTITLE_CACHE_PREFIX}${videoId}:${targetLang}`;
 
-  // Check cache
+  // Check cache — must match both count AND source texts
   const cached = await storage.getItem<{
+    texts: string[];
     translations: string[];
     timestamp: number;
   }>(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    if (cached.translations.length === texts.length) {
-      return cached.translations;
-    }
+  if (
+    cached &&
+    Date.now() - cached.timestamp < CACHE_TTL &&
+    cached.texts?.length === texts.length &&
+    cached.texts.every((t, i) => t === texts[i])
+  ) {
+    return cached.translations;
   }
 
   // Translate in batches
@@ -52,8 +56,9 @@ export async function translateTexts(
     results.push(...translated);
   }
 
-  // Cache results
+  // Cache results with source texts for proper invalidation
   await storage.setItem(cacheKey, {
+    texts,
     translations: results,
     timestamp: Date.now(),
   });

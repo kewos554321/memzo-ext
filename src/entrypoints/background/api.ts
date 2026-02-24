@@ -34,18 +34,39 @@ export async function login(
   email: string,
   password: string
 ): Promise<{ token: string; user: SessionUser }> {
-  const res = await fetch(`${MEMZO_API_URL}/api/ext/auth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || "Login failed");
+  let res: Response;
+  try {
+    res = await fetch(`${MEMZO_API_URL}/api/ext/auth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error("無法連線到伺服器，請確認 Memzo 服務是否運行中");
   }
 
-  const data = await res.json();
+  const text = await res.text();
+
+  if (!res.ok) {
+    let message = `登入失敗 (${res.status})`;
+    if (text) {
+      try {
+        const data = JSON.parse(text);
+        message = data.error || data.message || message;
+      } catch {
+        if (res.status === 401) message = "Email 或密碼錯誤";
+      }
+    }
+    throw new Error(message);
+  }
+
+  let data: { token: string; user: SessionUser };
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("伺服器回應格式錯誤");
+  }
+
   await storage.setItem(`local:${STORAGE_KEYS.TOKEN}`, data.token);
   await storage.setItem(`local:${STORAGE_KEYS.USER}`, data.user);
   return data;

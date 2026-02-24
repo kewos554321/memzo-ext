@@ -11,9 +11,12 @@ export interface CaptionTrack {
   name: { simpleText: string };
 }
 
+export type WordStatus = "learning" | "mastered";
+
 export interface DictionaryEntry {
   word: string;
   phonetic?: string;
+  audioUrl?: string;
   meanings: {
     partOfSpeech: string;
     definitions: { definition: string; example?: string }[];

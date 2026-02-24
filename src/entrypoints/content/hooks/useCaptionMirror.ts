@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { sendMessage } from "@/lib/messages";
 
+// In-memory translation cache: avoids re-translating the same sentence
+// within a session and prevents stale storage-cache hits.
+const memCache = new Map<string, string>();
+
 interface CaptionState {
   text: string | null;
   translation: string | null;
@@ -41,7 +45,14 @@ export function useCaptionMirror(videoId: string) {
       setCaption({ text: current, translation: null });
       if (!current) return;
 
-      // Translate with a short debounce to avoid duplicate requests
+      // Check in-memory cache first (instant, no API call)
+      const hit = memCache.get(current);
+      if (hit !== undefined) {
+        setCaption({ text: current, translation: hit });
+        return;
+      }
+
+      // Translate with a short debounce
       clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
         const res = await sendMessage({
@@ -52,6 +63,7 @@ export function useCaptionMirror(videoId: string) {
         });
         if (res.success) {
           const [translated] = res.data as string[];
+          memCache.set(current, translated);
           setCaption((prev) =>
             prev.text === current
               ? { text: current, translation: translated }
