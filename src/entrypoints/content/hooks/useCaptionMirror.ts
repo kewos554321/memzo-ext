@@ -45,7 +45,6 @@ export function useCaptionMirror(videoId: string) {
   const pendingTextRef = useRef<string | null>(null);
   const lastShownTextRef = useRef<string | null>(null);
   const displayDebounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const translateDebounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     function readDomText(): string | null {
@@ -79,16 +78,15 @@ export function useCaptionMirror(videoId: string) {
       lastShownTextRef.current = text;
       setDomCaption({ text, translation: translationCache.get(text) ?? null });
 
-      clearTimeout(translateDebounceRef.current);
-      translateDebounceRef.current = setTimeout(() => {
-        translateViaBackground(text).then(() => {
-          setDomCaption((prev) => {
-            if (prev.text !== text) return prev;
-            const t = translationCache.get(text);
-            return t ? { text, translation: t } : prev;
-          });
+      // Start translation immediately — no extra debounce needed here
+      // (display is already debounced by 300ms before showStable is called)
+      translateViaBackground(text).then(() => {
+        setDomCaption((prev) => {
+          if (prev.text !== text) return prev;
+          const t = translationCache.get(text);
+          return t ? { text, translation: t } : prev;
         });
-      }, 200);
+      });
     }
 
     function check() {
@@ -124,7 +122,6 @@ export function useCaptionMirror(videoId: string) {
     return () => {
       clearInterval(intervalId);
       clearTimeout(displayDebounceRef.current);
-      clearTimeout(translateDebounceRef.current);
     };
   }, []); // no deps — always runs for the lifetime of this component
 

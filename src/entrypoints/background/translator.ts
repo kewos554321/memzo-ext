@@ -48,13 +48,15 @@ export async function translateTexts(
     return cached.translations;
   }
 
-  // Translate in batches
-  const results: string[] = [];
+  // Split into batches and translate all in parallel
+  const batches: string[][] = [];
   for (let i = 0; i < texts.length; i += TRANSLATE_BATCH_SIZE) {
-    const batch = texts.slice(i, i + TRANSLATE_BATCH_SIZE);
-    const translated = await translateBatch(batch, "en", targetLang);
-    results.push(...translated);
+    batches.push(texts.slice(i, i + TRANSLATE_BATCH_SIZE));
   }
+  const batchResults = await Promise.all(
+    batches.map((batch) => translateBatch(batch, "en", targetLang))
+  );
+  const results = batchResults.flat();
 
   // Cache results with source texts for proper invalidation
   await storage.setItem(cacheKey, {

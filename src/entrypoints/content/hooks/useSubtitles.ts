@@ -39,7 +39,10 @@ export function useSubtitles(videoId: string | null) {
       // Merge short cues into sentence-level groups
       const merged = mergeCuesIntoSentences(rawCues);
 
-      // Translate via background
+      // Show English cues immediately — don't block on translation
+      setCues(merged);
+
+      // Translate in background; update cues when ready
       const texts = merged.map((c) => c.text);
       const transRes = await sendMessage({
         type: "TRANSLATE",
@@ -53,9 +56,9 @@ export function useSubtitles(videoId: string | null) {
         merged.forEach((cue, i) => {
           cue.translation = translations[i];
         });
+        // Trigger re-render so translations appear
+        setCues([...merged]);
       }
-
-      setCues(merged);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load subtitles");
     } finally {
