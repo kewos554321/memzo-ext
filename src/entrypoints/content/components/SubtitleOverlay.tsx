@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Collection } from "@/lib/types";
+import type { Deck } from "@/lib/types";
 import { useCaptionMirror } from "../hooks/useCaptionMirror";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
@@ -11,9 +11,10 @@ interface SubtitleOverlayProps {
 
 export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
   const { text, translation } = useCaptionMirror(videoId);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [visible, setVisible] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // Listen for toolbar pill toggle
   useEffect(() => {
@@ -24,21 +25,22 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
     return () => window.removeEventListener("memzo:toggle", handler);
   }, []);
 
-  // Load collections
+  // Load decks
   useEffect(() => {
     async function load() {
       const authRes = await sendMessage({ type: "GET_AUTH_STATE" });
       if (!authRes.success) return;
       const { token } = authRes.data as { token: string | null };
       if (!token) return;
+      setIsAuthenticated(true);
 
-      const colRes = await sendMessage({ type: "GET_COLLECTIONS" });
-      if (colRes.success) setCollections(colRes.data as Collection[]);
+      const colRes = await sendMessage({ type: "GET_DECKS" });
+      if (colRes.success) setDecks(colRes.data as Deck[]);
 
       const saved = await storage.getItem<string>(
-        `local:${STORAGE_KEYS.SELECTED_COLLECTION}`
+        `local:${STORAGE_KEYS.SELECTED_DECK}`
       );
-      if (saved) setSelectedCollectionId(saved);
+      if (saved) setSelectedDeckId(saved);
     }
     load();
   }, []);
@@ -57,8 +59,10 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
               <WordSpan
                 key={i}
                 word={part}
-                collections={collections}
-                selectedCollectionId={selectedCollectionId}
+                currentSubtitle={text}
+                isAuthenticated={isAuthenticated}
+                decks={decks}
+                selectedDeckId={selectedDeckId}
               />
             )
           )}

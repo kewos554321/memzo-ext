@@ -13,6 +13,7 @@ export default defineConfig({
       "https://translate.googleapis.com/*",
       "https://api.dictionaryapi.dev/*",
       "http://localhost:3000/*",
+      "http://localhost:3001/*",
       "https://memzo.vercel.app/*",
     ],
   },

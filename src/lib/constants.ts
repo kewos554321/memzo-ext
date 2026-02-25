@@ -4,7 +4,7 @@ export const MEMZO_API_URL =
 export const STORAGE_KEYS = {
   TOKEN: "memzo_token",
   USER: "memzo_user",
-  SELECTED_COLLECTION: "memzo_selected_collection",
+  SELECTED_DECK: "memzo_selected_deck",
   RECENT_WORDS: "memzo_recent_words",
   SUBTITLE_CACHE_PREFIX: "sub_cache_",
   WORD_STATUSES: "word_statuses",

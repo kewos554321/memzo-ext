@@ -1,13 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import type { DictionaryEntry, Collection, WordStatus } from "@/lib/types";
+import type { DictionaryEntry, Deck, WordStatus } from "@/lib/types";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
+import { YoutubeAdapter } from "@/lib/sources/youtube";
 import { Tooltip } from "./Tooltip";
 
 interface WordSpanProps {
   word: string;
-  collections: Collection[];
-  selectedCollectionId: string | null;
+  currentSubtitle: string;
+  isAuthenticated: boolean;
+  decks: Deck[];
+  selectedDeckId: string | null;
 }
 
 // Module-level word status cache shared across all WordSpan instances
@@ -37,10 +40,9 @@ async function saveStatus(word: string, status: WordStatus | null) {
   await storage.setItem(`local:${STORAGE_KEYS.WORD_STATUSES}`, statusMap);
 }
 
-export function WordSpan({ word, collections, selectedCollectionId }: WordSpanProps) {
+export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, selectedDeckId }: WordSpanProps) {
   const [entry, setEntry] = useState<DictionaryEntry | null | undefined>(undefined);
   const [showTooltip, setShowTooltip] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<WordStatus | null>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
   const showTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -89,27 +91,27 @@ export function WordSpan({ word, collections, selectedCollectionId }: WordSpanPr
   async function handleStatusChange(next: WordStatus | null) {
     setStatus(next);
     await saveStatus(word, next);
-  }
-
-  async function handleSave() {
-    if (!selectedCollectionId || saving) return;
-    setSaving(true);
-    try {
-      const back = entry
-        ? `${entry.phonetic ? `${entry.phonetic}\n` : ""}${
-            entry.meanings[0]?.definitions[0]?.definition || ""
-          }`
+    if (next !== null && isAuthenticated) {
+      const definition = entry
+        ? entry.meanings[0]?.definitions[0]?.definition || word
         : word;
-      await sendMessage({
-        type: "SAVE_CARD",
-        collectionId: selectedCollectionId,
-        front: word,
-        back,
-      });
-    } finally {
-      setSaving(false);
+      const source = new YoutubeAdapter(currentSubtitle, word).getContext();
+      sendMessage({
+        type: "CAPTURE_WORD",
+        word,
+        definition,
+        phonetic: entry?.phonetic,
+        audioUrl: entry?.audioUrl,
+        source,
+      }).then((res) => {
+        if (!res.success) console.error("[memzo] CAPTURE_WORD failed:", res.error);
+        else console.log("[memzo] captured:", word);
+      }).catch((e) => console.error("[memzo] sendMessage error:", e));
+    } else if (next !== null && !isAuthenticated) {
+      console.warn("[memzo] not authenticated, skip capture");
     }
   }
+
 
   if (!isWord) return <span>{word}</span>;
 
@@ -139,10 +141,7 @@ export function WordSpan({ word, collections, selectedCollectionId }: WordSpanPr
           entry={entry}
           word={word}
           status={status}
-          saving={saving}
-          canSave={!!selectedCollectionId}
           onStatusChange={handleStatusChange}
-          onSave={handleSave}
           onMouseEnter={() => { clearTimeout(showTimerRef.current); clearTimeout(hideTimerRef.current); }}
           onMouseLeave={() => { setShowTooltip(false); globalHideTooltip = null; }}
         />

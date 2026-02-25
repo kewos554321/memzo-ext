@@ -6,9 +6,10 @@ import {
   login,
   logout,
   getAuthState,
-  getCollections,
-  createCollection,
+  getDecks,
+  createDeck,
   saveCard,
+  captureWord,
 } from "./api";
 
 export default defineBackground(() => {
@@ -45,17 +46,23 @@ async function handleMessage(
         const entry = await lookupWord(message.word);
         return { success: true, data: entry };
       }
-      case "SAVE_CARD": {
-        await saveCard(message.collectionId, message.front, message.back);
+      case "CAPTURE_WORD": {
+        console.log("[memzo bg] capturing:", message.word);
+        await captureWord(message.word, message.definition, message.source, message.phonetic, message.audioUrl);
+        console.log("[memzo bg] captured ok:", message.word);
         return { success: true, data: null };
       }
-      case "GET_COLLECTIONS": {
-        const collections = await getCollections();
-        return { success: true, data: collections };
+      case "SAVE_CARD": {
+        await saveCard(message.deckId, message.front, message.back);
+        return { success: true, data: null };
       }
-      case "CREATE_COLLECTION": {
-        const collection = await createCollection(message.title);
-        return { success: true, data: collection };
+      case "GET_DECKS": {
+        const decks = await getDecks();
+        return { success: true, data: decks };
+      }
+      case "CREATE_DECK": {
+        const deck = await createDeck(message.title);
+        return { success: true, data: deck };
       }
       case "GET_AUTH_STATE": {
         const state = await getAuthState();

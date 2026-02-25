@@ -1,5 +1,5 @@
 import { MEMZO_API_URL, STORAGE_KEYS } from "@/lib/constants";
-import type { Collection, SessionUser } from "@/lib/types";
+import type { Deck, SessionUser, SourceContext } from "@/lib/types";
 
 async function getToken(): Promise<string | null> {
   const result = await storage.getItem<string>(
@@ -75,7 +75,7 @@ export async function login(
 export async function logout(): Promise<void> {
   await storage.removeItem(`local:${STORAGE_KEYS.TOKEN}`);
   await storage.removeItem(`local:${STORAGE_KEYS.USER}`);
-  await storage.removeItem(`local:${STORAGE_KEYS.SELECTED_COLLECTION}`);
+  await storage.removeItem(`local:${STORAGE_KEYS.SELECTED_DECK}`);
 }
 
 export async function getAuthState(): Promise<{
@@ -89,27 +89,49 @@ export async function getAuthState(): Promise<{
   return { user: token ? user : null, token };
 }
 
-export async function getCollections(): Promise<Collection[]> {
-  const res = await authFetch("/api/ext/collections");
-  if (!res.ok) throw new Error("Failed to fetch collections");
+export async function getDecks(): Promise<Deck[]> {
+  const res = await authFetch("/api/ext/decks");
+  if (!res.ok) throw new Error("Failed to fetch decks");
   return res.json();
 }
 
-export async function createCollection(title: string): Promise<Collection> {
-  const res = await authFetch("/api/ext/collections", {
+export async function createDeck(title: string): Promise<Deck> {
+  const res = await authFetch("/api/ext/decks", {
     method: "POST",
     body: JSON.stringify({ title, description: "" }),
   });
-  if (!res.ok) throw new Error("Failed to create collection");
+  if (!res.ok) throw new Error("Failed to create deck");
   return res.json();
 }
 
+export async function captureWord(
+  word: string,
+  definition: string,
+  source: SourceContext,
+  phonetic?: string,
+  audioUrl?: string
+): Promise<void> {
+  const res = await authFetch("/api/words/capture", {
+    method: "POST",
+    body: JSON.stringify({ word, definition, phonetic, audioUrl, source }),
+  });
+  if (!res.ok) throw new Error("Failed to capture word");
+
+  const key = `local:${STORAGE_KEYS.RECENT_WORDS}`;
+  const recent =
+    (await storage.getItem<{ front: string; back: string; savedAt: number }[]>(
+      key
+    )) || [];
+  recent.unshift({ front: word, back: definition, savedAt: Date.now() });
+  await storage.setItem(key, recent.slice(0, 50));
+}
+
 export async function saveCard(
-  collectionId: string,
+  deckId: string,
   front: string,
   back: string
 ): Promise<void> {
-  const res = await authFetch(`/api/ext/collections/${collectionId}/cards`, {
+  const res = await authFetch(`/api/ext/decks/${deckId}/cards`, {
     method: "POST",
     body: JSON.stringify({ cards: [{ front, back }] }),
   });

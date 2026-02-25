@@ -30,7 +30,7 @@ export interface Card {
   createdAt: number;
 }
 
-export interface Collection {
+export interface Deck {
   id: string;
   title: string;
   description: string;
@@ -45,14 +45,30 @@ export interface SessionUser {
   email: string;
 }
 
+export interface SourceContext {
+  type: string
+  url?: string
+  videoId?: string
+  title?: string
+  timestamp?: number
+  context?: string
+  highlightWord?: string
+  [key: string]: unknown
+}
+
+export interface SourceAdapter {
+  getContext(): SourceContext
+}
+
 // Message types between content script and background
 export type MessageRequest =
   | { type: "FETCH_SUBTITLES"; url: string; videoId: string }
   | { type: "TRANSLATE"; texts: string[]; videoId: string; lang: string }
   | { type: "LOOKUP_WORD"; word: string }
-  | { type: "SAVE_CARD"; collectionId: string; front: string; back: string }
-  | { type: "GET_COLLECTIONS" }
-  | { type: "CREATE_COLLECTION"; title: string }
+  | { type: "SAVE_CARD"; deckId: string; front: string; back: string }
+  | { type: "CAPTURE_WORD"; word: string; definition: string; phonetic?: string; audioUrl?: string; source: SourceContext }
+  | { type: "GET_DECKS" }
+  | { type: "CREATE_DECK"; title: string }
   | { type: "GET_AUTH_STATE" }
   | { type: "LOGIN"; email: string; password: string }
   | { type: "LOGOUT" };

@@ -6,10 +6,7 @@ interface TooltipProps {
   entry: DictionaryEntry | null;
   word: string;
   status: WordStatus | null;
-  saving: boolean;
-  canSave: boolean;
   onStatusChange: (next: WordStatus | null) => void;
-  onSave: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
@@ -35,10 +32,7 @@ export function Tooltip({
   entry,
   word,
   status,
-  saving,
-  canSave,
   onStatusChange,
-  onSave,
   onMouseEnter,
   onMouseLeave,
 }: TooltipProps) {
@@ -134,16 +128,6 @@ export function Tooltip({
         </button>
       </div>
 
-      {/* Save to collection */}
-      {canSave && (
-        <button
-          onClick={onSave}
-          disabled={saving}
-          style={{ ...saveCardBtnStyle, opacity: saving ? 0.5 : 1 }}
-        >
-          {saving ? "儲存中…" : "＋ 加入單字卡"}
-        </button>
-      )}
 
       {/* Arrow */}
       <div style={arrowStyle} />
@@ -207,19 +191,6 @@ function statusBtnStyle(active: boolean, color: "blue" | "green"): React.CSSProp
   };
 }
 
-const saveCardBtnStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  marginTop: "8px",
-  padding: "5px 0",
-  borderRadius: "7px",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "transparent",
-  color: "#a1a1aa",
-  fontSize: "12px",
-  cursor: "pointer",
-  textAlign: "center",
-};
 
 const arrowStyle: React.CSSProperties = {
   position: "absolute",

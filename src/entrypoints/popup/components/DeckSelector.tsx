@@ -1,19 +1,19 @@
 import { useState } from "react";
-import type { Collection } from "@/lib/types";
+import type { Deck } from "@/lib/types";
 
-interface CollectionSelectorProps {
-  collections: Collection[];
+interface DeckSelectorProps {
+  decks: Deck[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCreate: (title: string) => void;
 }
 
-export function CollectionSelector({
-  collections,
+export function DeckSelector({
+  decks,
   selectedId,
   onSelect,
   onCreate,
-}: CollectionSelectorProps) {
+}: DeckSelectorProps) {
   const [newTitle, setNewTitle] = useState("");
   const [showNew, setShowNew] = useState(false);
 
@@ -26,9 +26,9 @@ export function CollectionSelector({
           onChange={(e) => onSelect(e.target.value)}
         >
           <option value="" disabled>
-            Select a collection...
+            Select a deck...
           </option>
-          {collections.map((c) => (
+          {decks.map((c) => (
             <option key={c.id} value={c.id}>
               {c.title} ({c.cards.length} cards)
             </option>
@@ -37,11 +37,11 @@ export function CollectionSelector({
       </div>
 
       {showNew ? (
-        <div className="new-collection-row">
+        <div className="new-deck-row">
           <input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="New collection name"
+            placeholder="New deck name"
             onKeyDown={(e) => {
               if (e.key === "Enter" && newTitle.trim()) {
                 onCreate(newTitle.trim());
@@ -68,7 +68,7 @@ export function CollectionSelector({
           onClick={() => setShowNew(true)}
           style={{ color: "#a6e3a1" }}
         >
-          + New collection
+          + New deck
         </button>
       )}
     </div>
