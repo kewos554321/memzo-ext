@@ -1,100 +1,181 @@
-import { useState, useEffect, useRef } from "react";
-import { sendMessage } from "@/lib/messages";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSubtitles } from "./useSubtitles";
+import { useVideoTime } from "./useVideoTime";
 
-// In-memory translation cache: avoids re-translating the same sentence
-// within a session and prevents stale storage-cache hits.
-const memCache = new Map<string, string>();
+// Translation cache shared across renders
+const translationCache = new Map<string, string>();
+const pendingTranslations = new Set<string>();
+
+async function translateViaBackground(text: string): Promise<void> {
+  if (!text || translationCache.has(text) || pendingTranslations.has(text)) return;
+  pendingTranslations.add(text);
+  try {
+    const res = await browser.runtime.sendMessage({
+      type: "TRANSLATE",
+      texts: [text],
+      videoId: "",
+      lang: "zh-TW",
+    });
+    if (res?.success) {
+      const [translated] = res.data as string[];
+      if (translated) translationCache.set(text, translated);
+    }
+  } catch {
+    // ignore
+  } finally {
+    pendingTranslations.delete(text);
+  }
+}
 
 interface CaptionState {
   text: string | null;
   translation: string | null;
 }
 
-/**
- * Mirrors YouTube's own CC rendering by watching .ytp-caption-window-container
- * with a MutationObserver. YouTube handles all fetch/parse/timing; we just read
- * the resulting DOM text and translate it on the fly.
- */
 export function useCaptionMirror(videoId: string) {
-  const [caption, setCaption] = useState<CaptionState>({ text: null, translation: null });
-  const lastTextRef = useRef<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const { cues } = useSubtitles(videoId);
+  const currentTime = useVideoTime();
+
+  // ── DOM caption: poll YouTube's hidden CC text every 150ms ──
+  // Always active — acts as safety net when time-based lookup has no match
+  // (between sentences, before first cue, subtitle fetch failed, etc.)
+  const [domCaption, setDomCaption] = useState<CaptionState>({ text: null, translation: null });
+  // pendingTextRef: latest raw text from DOM (may still be mid-sentence)
+  // lastShownTextRef: text currently displayed to the user
+  const pendingTextRef = useRef<string | null>(null);
+  const lastShownTextRef = useRef<string | null>(null);
+  const displayDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const translateDebounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    let observer: MutationObserver | null = null;
-    let retryTimer: ReturnType<typeof setTimeout>;
+    function readDomText(): string | null {
+      // Try specific container + window first (avoids stacking from multiple windows)
+      const container =
+        document.querySelector(".ytp-caption-window-container") ??
+        document.querySelector(".caption-window-container");
 
-    function readText(): string | null {
-      const container = document.querySelector(".ytp-caption-window-container");
-      if (!container) return null;
-      const segs = container.querySelectorAll(".ytp-caption-segment");
-      if (!segs.length) return null;
-      const text = Array.from(segs)
-        .map((s) => s.textContent ?? "")
-        .join(" ")
-        .trim();
-      return text || null;
-    }
-
-    function onMutation() {
-      const current = readText();
-      if (current === lastTextRef.current) return;
-      lastTextRef.current = current;
-
-      // Show new text immediately, clear old translation
-      setCaption({ text: current, translation: null });
-      if (!current) return;
-
-      // Check in-memory cache first (instant, no API call)
-      const hit = memCache.get(current);
-      if (hit !== undefined) {
-        setCaption({ text: current, translation: hit });
-        return;
-      }
-
-      // Translate with a short debounce
-      clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(async () => {
-        const res = await sendMessage({
-          type: "TRANSLATE",
-          texts: [current],
-          videoId,
-          lang: "zh-TW",
-        });
-        if (res.success) {
-          const [translated] = res.data as string[];
-          memCache.set(current, translated);
-          setCaption((prev) =>
-            prev.text === current
-              ? { text: current, translation: translated }
-              : prev
-          );
+      if (container) {
+        const windows = container.querySelectorAll(".ytp-caption-window, .caption-window");
+        const lastWindow = windows[windows.length - 1];
+        if (lastWindow) {
+          const segs = lastWindow.querySelectorAll("span.ytp-caption-segment");
+          if (segs.length) {
+            return Array.from(segs).map((s) => s.textContent ?? "").join("").trim() || null;
+          }
         }
-      }, 150);
+      }
+
+      // Fallback: query all caption segments directly (works even if container class changed)
+      const allSegs = document.querySelectorAll("span.ytp-caption-segment");
+      if (allSegs.length) {
+        return Array.from(allSegs).map((s) => s.textContent ?? "").join("").trim() || null;
+      }
+
+      return null;
     }
 
-    function attach() {
-      const container = document.querySelector(".ytp-caption-window-container");
-      if (!container) {
-        retryTimer = setTimeout(attach, 500);
+    function showStable(text: string) {
+      if (text === lastShownTextRef.current) return;
+      lastShownTextRef.current = text;
+      setDomCaption({ text, translation: translationCache.get(text) ?? null });
+
+      clearTimeout(translateDebounceRef.current);
+      translateDebounceRef.current = setTimeout(() => {
+        translateViaBackground(text).then(() => {
+          setDomCaption((prev) => {
+            if (prev.text !== text) return prev;
+            const t = translationCache.get(text);
+            return t ? { text, translation: t } : prev;
+          });
+        });
+      }, 200);
+    }
+
+    function check() {
+      const text = readDomText();
+
+      if (!text) {
+        // Caption ended — clear immediately, cancel any pending display
+        if (pendingTextRef.current !== null || lastShownTextRef.current !== null) {
+          pendingTextRef.current = null;
+          lastShownTextRef.current = null;
+          clearTimeout(displayDebounceRef.current);
+          clearTimeout(translateDebounceRef.current);
+          setDomCaption({ text: null, translation: null });
+        }
         return;
       }
-      observer = new MutationObserver(onMutation);
-      observer.observe(container, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
+
+      if (text === pendingTextRef.current) return; // no change
+      pendingTextRef.current = text;
+
+      // Debounce display so we only show once YouTube stops adding words to the phrase.
+      // This prevents word-by-word flickering in the DOM fallback mode.
+      clearTimeout(displayDebounceRef.current);
+      displayDebounceRef.current = setTimeout(() => {
+        const stable = pendingTextRef.current;
+        if (stable) showStable(stable);
+      }, 300);
     }
 
-    attach();
+    check(); // immediate first read
+    const intervalId = setInterval(check, 150);
 
     return () => {
-      observer?.disconnect();
-      clearTimeout(retryTimer);
-      clearTimeout(debounceRef.current);
+      clearInterval(intervalId);
+      clearTimeout(displayDebounceRef.current);
+      clearTimeout(translateDebounceRef.current);
     };
-  }, [videoId]);
+  }, []); // no deps — always runs for the lifetime of this component
 
-  return caption;
+  // ── Time-based cue lookup from pre-fetched sentence-level subtitles ──
+  const lastCueIndexRef = useRef<number>(-1);
+
+  const findCueIndex = useCallback(
+    (time: number): number => {
+      if (!cues.length) return -1;
+      let lo = 0;
+      let hi = cues.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const cue = cues[mid];
+        if (time < cue.start) hi = mid - 1;
+        else if (time > cue.end) lo = mid + 1;
+        else return mid;
+      }
+      return -1;
+    },
+    [cues]
+  );
+
+  const [timeCue, setTimeCue] = useState<CaptionState | null>(null);
+
+  useEffect(() => {
+    if (!cues.length) {
+      setTimeCue(null);
+      lastCueIndexRef.current = -1;
+      return;
+    }
+
+    const idx = findCueIndex(currentTime);
+
+    if (idx === -1) {
+      if (lastCueIndexRef.current !== -1) {
+        lastCueIndexRef.current = -1;
+        setTimeCue(null);
+      }
+      return;
+    }
+
+    if (idx === lastCueIndexRef.current) return;
+    lastCueIndexRef.current = idx;
+
+    const cue = cues[idx];
+    setTimeCue({ text: cue.text, translation: cue.translation ?? null });
+  }, [currentTime, findCueIndex, cues]);
+
+  // Prefer sentence-level pre-fetched cue (complete sentence + pre-translated).
+  // Fall back to YouTube CC DOM text when no cue is matched
+  // (before first cue, between sentences, or when subtitle fetch failed).
+  return timeCue ?? domCaption;
 }

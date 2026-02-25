@@ -10,6 +10,7 @@ import {
   createDeck,
   saveCard,
   captureWord,
+  getVocabWords,
 } from "./api";
 
 export default defineBackground(() => {
@@ -45,6 +46,10 @@ async function handleMessage(
       case "LOOKUP_WORD": {
         const entry = await lookupWord(message.word);
         return { success: true, data: entry };
+      }
+      case "GET_VOCAB_WORDS": {
+        const words = await getVocabWords();
+        return { success: true, data: words };
       }
       case "CAPTURE_WORD": {
         console.log("[memzo bg] capturing:", message.word);

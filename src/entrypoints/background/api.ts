@@ -104,6 +104,13 @@ export async function createDeck(title: string): Promise<Deck> {
   return res.json();
 }
 
+export async function getVocabWords(): Promise<string[]> {
+  const res = await authFetch("/api/words");
+  if (!res.ok) return [];
+  const words = await res.json() as { word: string }[];
+  return words.map((w) => w.word.toLowerCase());
+}
+
 export async function captureWord(
   word: string,
   definition: string,

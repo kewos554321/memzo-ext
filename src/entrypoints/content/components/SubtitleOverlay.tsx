@@ -3,7 +3,7 @@ import type { Deck } from "@/lib/types";
 import { useCaptionMirror } from "../hooks/useCaptionMirror";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
-import { WordSpan } from "./WordSpan";
+import { WordSpan, syncVocabStatus } from "./WordSpan";
 
 interface SubtitleOverlayProps {
   videoId: string;
@@ -33,6 +33,10 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
       const { token } = authRes.data as { token: string | null };
       if (!token) return;
       setIsAuthenticated(true);
+
+      // Sync vocab words from DB into local statusMap
+      const vocabRes = await sendMessage({ type: "GET_VOCAB_WORDS" });
+      if (vocabRes.success) syncVocabStatus(vocabRes.data as string[]);
 
       const colRes = await sendMessage({ type: "GET_DECKS" });
       if (colRes.success) setDecks(colRes.data as Deck[]);
@@ -68,10 +72,10 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
           )}
         </div>
 
-        {/* Chinese translation */}
-        {translation && (
-          <div style={{ fontSize: "16px", color: "#f9e2af" }}>{translation}</div>
-        )}
+        {/* Chinese translation — show placeholder while fetching */}
+        <div style={{ fontSize: "16px", color: translation ? "#f9e2af" : "rgba(249,226,175,0.45)" }}>
+          {translation ?? "翻譯中..."}
+        </div>
       </div>
     </div>
   );

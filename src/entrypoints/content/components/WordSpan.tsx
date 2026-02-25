@@ -30,6 +30,13 @@ async function loadStatuses() {
   if (data) statusMap = data;
 }
 
+// Called by SubtitleOverlay after DB sync — marks captured words as "learning" if not already set
+export function syncVocabStatus(vocabWords: string[]) {
+  for (const w of vocabWords) {
+    if (!statusMap[w]) statusMap[w] = "learning";
+  }
+}
+
 async function saveStatus(word: string, status: WordStatus | null) {
   const key = word.toLowerCase();
   if (status === null) {

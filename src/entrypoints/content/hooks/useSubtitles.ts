@@ -18,29 +18,29 @@ export function useSubtitles(videoId: string | null) {
       if (!tracks || tracks.length === 0) {
         tracks = await waitForCaptionTracks(6000);
       }
-      if (!tracks || tracks.length === 0) {
-        setError("No captions available");
-        setLoading(false);
-        return;
-      }
-
-      // Prefer English captions
+      // Prefer English captions; fall back to constructing a direct timedtext URL
       const enTrack =
         tracks.find((t) => t.languageCode === "en") ||
         tracks.find((t) => t.languageCode.startsWith("en")) ||
         tracks[0];
 
+      // If no tracks found, fall back to a direct timedtext URL for ASR captions
+      const subtitleUrl = enTrack?.baseUrl
+        ?? `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=json3`;
+
       // Fetch subtitles via background
       const subRes = await sendMessage({
         type: "FETCH_SUBTITLES",
-        url: enTrack.baseUrl,
+        url: subtitleUrl,
         videoId,
       });
       if (!subRes.success) throw new Error(subRes.error);
-      const fetchedCues = subRes.data as SubtitleCue[];
+      const rawCues = subRes.data as SubtitleCue[];
+      // Merge short cues into sentence-level groups
+      const merged = mergeCuesIntoSentences(rawCues);
 
       // Translate via background
-      const texts = fetchedCues.map((c) => c.text);
+      const texts = merged.map((c) => c.text);
       const transRes = await sendMessage({
         type: "TRANSLATE",
         texts,
@@ -50,12 +50,12 @@ export function useSubtitles(videoId: string | null) {
 
       if (transRes.success) {
         const translations = transRes.data as string[];
-        fetchedCues.forEach((cue, i) => {
+        merged.forEach((cue, i) => {
           cue.translation = translations[i];
         });
       }
 
-      setCues(fetchedCues);
+      setCues(merged);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load subtitles");
     } finally {
@@ -82,6 +82,37 @@ function extractCaptionTracks(): CaptionTrack[] {
     // ignore
   }
   return [];
+}
+
+/**
+ * Merge short cues into sentence-level groups.
+ * YouTube json3 often has 1-2 word fragments; we join them until we hit
+ * sentence-ending punctuation (.?!) or a timing gap > 2s.
+ */
+function mergeCuesIntoSentences(cues: SubtitleCue[]): SubtitleCue[] {
+  if (cues.length === 0) return [];
+
+  const GAP_THRESHOLD = 2; // seconds
+  const SENTENCE_END = /[.!?]$/;
+
+  const result: SubtitleCue[] = [];
+  let buf: SubtitleCue = { ...cues[0] };
+
+  for (let i = 1; i < cues.length; i++) {
+    const prev = cues[i - 1];
+    const cur = cues[i];
+    const gap = cur.start - prev.end;
+
+    if (gap > GAP_THRESHOLD || SENTENCE_END.test(buf.text)) {
+      result.push(buf);
+      buf = { ...cur };
+    } else {
+      buf.text = buf.text + " " + cur.text;
+      buf.end = cur.end;
+    }
+  }
+  result.push(buf);
+  return result;
 }
 
 /**

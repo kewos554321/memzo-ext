@@ -67,6 +67,7 @@ export type MessageRequest =
   | { type: "LOOKUP_WORD"; word: string }
   | { type: "SAVE_CARD"; deckId: string; front: string; back: string }
   | { type: "CAPTURE_WORD"; word: string; definition: string; phonetic?: string; audioUrl?: string; source: SourceContext }
+  | { type: "GET_VOCAB_WORDS" }
   | { type: "GET_DECKS" }
   | { type: "CREATE_DECK"; title: string }
   | { type: "GET_AUTH_STATE" }

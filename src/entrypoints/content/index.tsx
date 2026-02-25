@@ -64,11 +64,13 @@ export default defineContentScript({
     }
 
     function hideYtCaptions() {
+      // Use opacity:0 so YouTube still renders CC into DOM (needed for fallback reading)
+      // pointer-events:none prevents it from blocking clicks
       if (!document.getElementById("memzo-hide-captions")) {
         const style = document.createElement("style");
         style.id = "memzo-hide-captions";
         style.textContent =
-          ".ytp-caption-window-container { display: none !important; }";
+          ".ytp-caption-window-container { opacity: 0 !important; pointer-events: none !important; }";
         document.head.appendChild(style);
       }
     }
