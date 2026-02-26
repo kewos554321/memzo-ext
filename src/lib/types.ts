@@ -13,6 +13,8 @@ export interface CaptionTrack {
 
 export type WordStatus = "learning" | "mastered";
 
+export type CEFRLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+
 export type LanguageCode = "zh-TW" | "en";
 
 export const LANGUAGES: { code: LanguageCode; label: string }[] = [
@@ -81,7 +83,7 @@ export type MessageRequest =
   | { type: "LOGIN"; email: string; password: string }
   | { type: "LOGOUT" }
   | { type: "GET_SETTINGS" }
-  | { type: "SAVE_SETTINGS"; nativeLang?: string; targetLang?: string };
+  | { type: "SAVE_SETTINGS"; nativeLang?: string; targetLang?: string; userLevels?: Record<string, string> };
 
 export type MessageResponse =
   | { success: true; data: unknown }

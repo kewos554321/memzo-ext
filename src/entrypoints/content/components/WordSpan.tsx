@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import type { DictionaryEntry, Deck, WordStatus } from "@/lib/types";
+import type { DictionaryEntry, Deck, WordStatus, CEFRLevel, LanguageCode } from "@/lib/types";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { YoutubeAdapter } from "@/lib/sources/youtube";
 import { Tooltip } from "./Tooltip";
+import { getDifficulty, isInLearningZone } from "@/lib/wordDifficulty";
 
 interface WordSpanProps {
   word: string;
@@ -12,11 +13,45 @@ interface WordSpanProps {
   decks: Deck[];
   selectedDeckId: string | null;
   nativeLang?: string;
+  targetLang?: LanguageCode;
 }
 
 // Module-level word status cache shared across all WordSpan instances
 let statusMap: Record<string, WordStatus> = {};
 let statusLoaded = false;
+
+// Module-level user level cache (per language)
+const cachedUserLevels: Partial<Record<LanguageCode, CEFRLevel | null>> = {};
+const levelWatched = new Set<LanguageCode>();
+// React components subscribe here to re-render when a level changes
+const levelListeners = new Map<LanguageCode, Set<() => void>>();
+
+function notifyLevelListeners(lang: LanguageCode) {
+  levelListeners.get(lang)?.forEach((fn) => fn());
+}
+
+async function loadUserLevel(lang: LanguageCode) {
+  if (cachedUserLevels[lang] !== undefined) return;
+  cachedUserLevels[lang] = null; // mark as loading
+
+  const lvl = await storage.getItem<CEFRLevel>(
+    `local:${STORAGE_KEYS.USER_LEVEL_PREFIX}${lang}`
+  );
+  cachedUserLevels[lang] = lvl ?? null;
+  notifyLevelListeners(lang);
+
+  // Watch for live updates (user retakes test, changes level on web)
+  if (!levelWatched.has(lang)) {
+    levelWatched.add(lang);
+    storage.watch<CEFRLevel>(
+      `local:${STORAGE_KEYS.USER_LEVEL_PREFIX}${lang}`,
+      (newVal) => {
+        cachedUserLevels[lang] = newVal ?? null;
+        notifyLevelListeners(lang);
+      }
+    );
+  }
+}
 
 // Module-level: tracks the hide function of the currently visible tooltip
 // so entering a new word immediately hides the previous one
@@ -48,10 +83,11 @@ async function saveStatus(word: string, status: WordStatus | null) {
   await storage.setItem(`local:${STORAGE_KEYS.WORD_STATUSES}`, statusMap);
 }
 
-export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, selectedDeckId, nativeLang }: WordSpanProps) {
+export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, selectedDeckId, nativeLang, targetLang = "en" }: WordSpanProps) {
   const [entry, setEntry] = useState<DictionaryEntry | null | undefined>(undefined);
   const [showTooltip, setShowTooltip] = useState(false);
   const [status, setStatus] = useState<WordStatus | null>(null);
+  const [userLevel, setUserLevel] = useState<CEFRLevel | null>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
   const showTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -62,10 +98,27 @@ export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, select
   useEffect(() => {
     if (!isWord) return;
     loadStatuses().then(() => {
-      const s = statusMap[word.toLowerCase()] ?? null;
-      setStatus(s);
+      setStatus(statusMap[word.toLowerCase()] ?? null);
     });
   }, [word, isWord]);
+
+  // Subscribe to user level — triggers re-render when level loads or changes
+  useEffect(() => {
+    if (!isWord) return;
+    if (!levelListeners.has(targetLang)) levelListeners.set(targetLang, new Set());
+    const update = () => setUserLevel(cachedUserLevels[targetLang] ?? null);
+    levelListeners.get(targetLang)!.add(update);
+
+    if (cachedUserLevels[targetLang] !== undefined) {
+      // Already cached: apply immediately
+      update();
+    } else {
+      // Not cached yet: load will notify when ready
+      loadUserLevel(targetLang);
+    }
+
+    return () => { levelListeners.get(targetLang)?.delete(update); };
+  }, [isWord, targetLang]);
 
   function handleMouseEnter() {
     if (!isWord) return;
@@ -123,7 +176,19 @@ export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, select
 
   if (!isWord) return <span>{word}</span>;
 
-  const boxStyle = getBoxStyle(status);
+  // Determine if this word should be highlighted based on user level
+  const inLearningZone = (() => {
+    // No level set yet → show all (default behavior)
+    if (!userLevel) return true;
+    // Already-marked words always show their status color
+    if (status !== null) return true;
+    const diff = getDifficulty(targetLang);
+    if (!diff) return true;
+    const wordLevel = diff.getLevel(word);
+    return isInLearningZone(wordLevel, userLevel);
+  })();
+
+  const boxStyle = getBoxStyle(status, inLearningZone);
 
   return (
     <span
@@ -159,7 +224,7 @@ export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, select
   );
 }
 
-function getBoxStyle(status: WordStatus | null): React.CSSProperties {
+function getBoxStyle(status: WordStatus | null, inLearningZone: boolean): React.CSSProperties {
   switch (status) {
     case "learning":
       return {
@@ -174,9 +239,18 @@ function getBoxStyle(status: WordStatus | null): React.CSSProperties {
         color: "rgba(255,255,255,0.55)",
       };
     default:
+      // Only show green highlight for words in the user's learning zone
+      if (inLearningZone) {
+        return {
+          border: "1.5px solid rgba(52, 211, 153, 0.7)",
+          background: "rgba(16, 185, 129, 0.08)",
+          color: "#fff",
+        };
+      }
+      // Out-of-zone words: no visual noise, still hoverable
       return {
-        border: "1.5px solid rgba(52, 211, 153, 0.7)",
-        background: "rgba(16, 185, 129, 0.08)",
+        border: "1.5px solid transparent",
+        background: "transparent",
         color: "#fff",
       };
   }

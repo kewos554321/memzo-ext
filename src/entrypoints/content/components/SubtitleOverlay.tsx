@@ -1,22 +1,25 @@
 import { useState, useEffect } from "react";
-import type { Deck } from "@/lib/types";
+import type { Deck, CEFRLevel } from "@/lib/types";
 import { useCaptionMirror } from "../hooks/useCaptionMirror";
 import { useLanguageSettings } from "../hooks/useLanguageSettings";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
+import { loadLevel } from "@/lib/difficulty/storage";
 import { WordSpan, syncVocabStatus } from "./WordSpan";
+import { LevelTestDialog } from "./LevelTestDialog";
 
 interface SubtitleOverlayProps {
   videoId: string;
 }
 
 export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
-  const { nativeLang } = useLanguageSettings();
+  const { nativeLang, targetLang, loaded: langLoaded } = useLanguageSettings();
   const { text, translation } = useCaptionMirror(videoId, nativeLang);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [visible, setVisible] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLevelTest, setShowLevelTest] = useState(false);
 
   // Listen for toolbar pill toggle
   useEffect(() => {
@@ -27,7 +30,7 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
     return () => window.removeEventListener("memzo:toggle", handler);
   }, []);
 
-  // Load decks
+  // Load auth + decks (run once)
   useEffect(() => {
     async function load() {
       const authRes = await sendMessage({ type: "GET_AUTH_STATE" });
@@ -36,23 +39,58 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
       if (!token) return;
       setIsAuthenticated(true);
 
-      // Sync vocab words from DB into local statusMap
       const vocabRes = await sendMessage({ type: "GET_VOCAB_WORDS" });
       if (vocabRes.success) syncVocabStatus(vocabRes.data as string[]);
 
       const colRes = await sendMessage({ type: "GET_DECKS" });
       if (colRes.success) setDecks(colRes.data as Deck[]);
 
-      const saved = await storage.getItem<string>(
-        `local:${STORAGE_KEYS.SELECTED_DECK}`
-      );
+      const saved = await storage.getItem<string>(`local:${STORAGE_KEYS.SELECTED_DECK}`);
       if (saved) setSelectedDeckId(saved);
     }
     load();
   }, []);
 
-  if (!visible || !text) return null;
+  // Check level only after language settings have loaded from storage
+  // (langLoaded = true once local storage has been read by useLanguageSettings)
+  useEffect(() => {
+    if (!langLoaded || !isAuthenticated) return;
+    loadLevel(targetLang).then((lvl) => {
+      if (!lvl) setShowLevelTest(true);
+    });
+  }, [langLoaded, isAuthenticated, targetLang]);
 
+  return (
+    <>
+      {showLevelTest && (
+        <LevelTestDialog
+          targetLang={targetLang}
+          onComplete={(_level: CEFRLevel) => setShowLevelTest(false)}
+          onClose={() => setShowLevelTest(false)}
+        />
+      )}
+      {visible && text && <SubtitleBox
+        text={text}
+        translation={translation}
+        isAuthenticated={isAuthenticated}
+        decks={decks}
+        selectedDeckId={selectedDeckId}
+        nativeLang={nativeLang}
+        targetLang={targetLang}
+      />}
+    </>
+  );
+}
+
+function SubtitleBox({ text, translation, isAuthenticated, decks, selectedDeckId, nativeLang, targetLang }: {
+  text: string;
+  translation: string | null;
+  isAuthenticated: boolean;
+  decks: Deck[];
+  selectedDeckId: string | null;
+  nativeLang: string;
+  targetLang: ReturnType<typeof useLanguageSettings>["targetLang"];
+}) {
   return (
     <div style={outerStyle}>
       <div style={subtitleStyle}>
@@ -70,6 +108,7 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
                 decks={decks}
                 selectedDeckId={selectedDeckId}
                 nativeLang={nativeLang}
+                targetLang={targetLang}
               />
             )
           )}

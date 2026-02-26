@@ -15,9 +15,10 @@ export function useLanguageSettings() {
     async function syncFromServer() {
       const res = await sendMessage({ type: "GET_SETTINGS" });
       if (res.success && res.data) {
-        const { nativeLang: serverNative, targetLang: serverTarget } = res.data as {
+        const { nativeLang: serverNative, targetLang: serverTarget, userLevels } = res.data as {
           nativeLang: string;
           targetLang: string;
+          userLevels?: Record<string, string>;
         };
         if (serverNative) {
           setNativeLangState(serverNative as LanguageCode);
@@ -26,6 +27,15 @@ export function useLanguageSettings() {
         if (serverTarget) {
           setTargetLangState(serverTarget as LanguageCode);
           await storage.setItem(`local:${STORAGE_KEYS.TARGET_LANG}`, serverTarget);
+        }
+        // Sync per-language levels from DB to local storage
+        if (userLevels) {
+          for (const [lang, level] of Object.entries(userLevels)) {
+            await storage.setItem(
+              `local:${STORAGE_KEYS.USER_LEVEL_PREFIX}${lang}`,
+              level
+            );
+          }
         }
       }
     }

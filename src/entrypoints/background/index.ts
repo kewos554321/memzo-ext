@@ -88,7 +88,11 @@ async function handleMessage(
         return { success: true, data: settings };
       }
       case "SAVE_SETTINGS": {
-        await saveSettings({ nativeLang: message.nativeLang, targetLang: message.targetLang });
+        await saveSettings({
+          nativeLang: message.nativeLang,
+          targetLang: message.targetLang,
+          userLevels: message.userLevels,
+        });
         return { success: true, data: null };
       }
       default:

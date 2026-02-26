@@ -10,6 +10,8 @@ export const STORAGE_KEYS = {
   WORD_STATUSES: "word_statuses",
   NATIVE_LANG: "memzo_native_lang",
   TARGET_LANG: "memzo_target_lang",
+  // Per-language level key: append the LanguageCode, e.g. "memzo_user_level_en"
+  USER_LEVEL_PREFIX: "memzo_user_level_",
 } as const;
 
 export const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days

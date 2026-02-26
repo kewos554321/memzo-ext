@@ -133,7 +133,11 @@ export async function captureWord(
   await storage.setItem(key, recent.slice(0, 50));
 }
 
-export async function getSettings(): Promise<{ nativeLang: string; targetLang: string } | null> {
+export async function getSettings(): Promise<{
+  nativeLang: string;
+  targetLang: string;
+  userLevels?: Record<string, string>;
+} | null> {
   try {
     const res = await authFetch("/api/ext/settings");
     if (!res.ok) return null;
@@ -146,6 +150,7 @@ export async function getSettings(): Promise<{ nativeLang: string; targetLang: s
 export async function saveSettings(settings: {
   nativeLang?: string;
   targetLang?: string;
+  userLevels?: Record<string, string>;
 }): Promise<void> {
   try {
     await authFetch("/api/ext/settings", {
