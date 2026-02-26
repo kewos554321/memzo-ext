@@ -133,6 +133,30 @@ export async function captureWord(
   await storage.setItem(key, recent.slice(0, 50));
 }
 
+export async function getSettings(): Promise<{ nativeLang: string; targetLang: string } | null> {
+  try {
+    const res = await authFetch("/api/ext/settings");
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSettings(settings: {
+  nativeLang?: string;
+  targetLang?: string;
+}): Promise<void> {
+  try {
+    await authFetch("/api/ext/settings", {
+      method: "PATCH",
+      body: JSON.stringify(settings),
+    });
+  } catch {
+    // not authenticated or network error, ignore
+  }
+}
+
 export async function saveCard(
   deckId: string,
   front: string,

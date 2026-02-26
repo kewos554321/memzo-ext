@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { LANGUAGES, type LanguageCode } from "@/lib/types";
+import { sendMessage } from "@/lib/messages";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -24,6 +25,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   async function handleDone() {
     await storage.setItem(`local:${STORAGE_KEYS.NATIVE_LANG}`, nativeLang);
     await storage.setItem(`local:${STORAGE_KEYS.TARGET_LANG}`, targetLang);
+    // Sync both fields to server in background
+    sendMessage({ type: "SAVE_SETTINGS", nativeLang, targetLang }).catch(() => {});
     window.dispatchEvent(new CustomEvent("memzo:lang-changed"));
     onClose();
   }

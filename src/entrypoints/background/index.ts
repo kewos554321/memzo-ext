@@ -11,6 +11,8 @@ import {
   saveCard,
   captureWord,
   getVocabWords,
+  getSettings,
+  saveSettings,
 } from "./api";
 
 export default defineBackground(() => {
@@ -79,6 +81,14 @@ async function handleMessage(
       }
       case "LOGOUT": {
         await logout();
+        return { success: true, data: null };
+      }
+      case "GET_SETTINGS": {
+        const settings = await getSettings();
+        return { success: true, data: settings };
+      }
+      case "SAVE_SETTINGS": {
+        await saveSettings({ nativeLang: message.nativeLang, targetLang: message.targetLang });
         return { success: true, data: null };
       }
       default:

@@ -79,7 +79,9 @@ export type MessageRequest =
   | { type: "CREATE_DECK"; title: string }
   | { type: "GET_AUTH_STATE" }
   | { type: "LOGIN"; email: string; password: string }
-  | { type: "LOGOUT" };
+  | { type: "LOGOUT" }
+  | { type: "GET_SETTINGS" }
+  | { type: "SAVE_SETTINGS"; nativeLang?: string; targetLang?: string };
 
 export type MessageResponse =
   | { success: true; data: unknown }
