@@ -29,7 +29,7 @@ async function translateBatch(
 export async function translateTexts(
   texts: string[],
   videoId: string,
-  targetLang: string = "zh-TW"
+  targetLang: string = "en"
 ): Promise<string[]> {
   const cacheKey = `local:${STORAGE_KEYS.SUBTITLE_CACHE_PREFIX}${videoId}:${targetLang}`;
 
@@ -54,7 +54,7 @@ export async function translateTexts(
     batches.push(texts.slice(i, i + TRANSLATE_BATCH_SIZE));
   }
   const batchResults = await Promise.all(
-    batches.map((batch) => translateBatch(batch, "en", targetLang))
+    batches.map((batch) => translateBatch(batch, "auto", targetLang))
   );
   const results = batchResults.flat();
 

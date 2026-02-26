@@ -32,7 +32,7 @@ interface CaptionState {
   translation: string | null;
 }
 
-export function useCaptionMirror(videoId: string, nativeLang: string = "zh-TW") {
+export function useCaptionMirror(videoId: string, nativeLang: string = "en") {
   const { cues } = useSubtitles(videoId, nativeLang);
   const currentTime = useVideoTime();
   const langRef = useRef(nativeLang);

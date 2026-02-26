@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { SubtitleCue, CaptionTrack } from "@/lib/types";
 import { sendMessage } from "@/lib/messages";
 
-export function useSubtitles(videoId: string | null, nativeLang: string = "zh-TW") {
+export function useSubtitles(videoId: string | null, nativeLang: string = "en") {
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

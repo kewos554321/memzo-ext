@@ -3,8 +3,8 @@ import { STORAGE_KEYS } from "@/lib/constants";
 import { sendMessage } from "@/lib/messages";
 import type { LanguageCode } from "@/lib/types";
 
-const DEFAULT_NATIVE: LanguageCode = "zh-TW";
-const DEFAULT_TARGET: LanguageCode = "en";
+const DEFAULT_NATIVE: LanguageCode = "en";
+const DEFAULT_TARGET: LanguageCode = "zh-TW";
 
 export function useLanguageSettings() {
   const [nativeLang, setNativeLangState] = useState<LanguageCode>(DEFAULT_NATIVE);
