@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Deck } from "@/lib/types";
 import { useCaptionMirror } from "../hooks/useCaptionMirror";
+import { useLanguageSettings } from "../hooks/useLanguageSettings";
 import { sendMessage } from "@/lib/messages";
 import { STORAGE_KEYS } from "@/lib/constants";
 import { WordSpan, syncVocabStatus } from "./WordSpan";
@@ -10,7 +11,8 @@ interface SubtitleOverlayProps {
 }
 
 export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
-  const { text, translation } = useCaptionMirror(videoId);
+  const { nativeLang } = useLanguageSettings();
+  const { text, translation } = useCaptionMirror(videoId, nativeLang);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [visible, setVisible] = useState(true);
@@ -67,6 +69,7 @@ export function SubtitleOverlay({ videoId }: SubtitleOverlayProps) {
                 isAuthenticated={isAuthenticated}
                 decks={decks}
                 selectedDeckId={selectedDeckId}
+                nativeLang={nativeLang}
               />
             )
           )}

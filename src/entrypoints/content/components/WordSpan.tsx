@@ -11,6 +11,7 @@ interface WordSpanProps {
   isAuthenticated: boolean;
   decks: Deck[];
   selectedDeckId: string | null;
+  nativeLang?: string;
 }
 
 // Module-level word status cache shared across all WordSpan instances
@@ -47,7 +48,7 @@ async function saveStatus(word: string, status: WordStatus | null) {
   await storage.setItem(`local:${STORAGE_KEYS.WORD_STATUSES}`, statusMap);
 }
 
-export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, selectedDeckId }: WordSpanProps) {
+export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, selectedDeckId, nativeLang }: WordSpanProps) {
   const [entry, setEntry] = useState<DictionaryEntry | null | undefined>(undefined);
   const [showTooltip, setShowTooltip] = useState(false);
   const [status, setStatus] = useState<WordStatus | null>(null);
@@ -151,6 +152,7 @@ export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, select
           onStatusChange={handleStatusChange}
           onMouseEnter={() => { clearTimeout(showTimerRef.current); clearTimeout(hideTimerRef.current); }}
           onMouseLeave={() => { setShowTooltip(false); globalHideTooltip = null; }}
+          nativeLang={nativeLang}
         />
       )}
     </span>

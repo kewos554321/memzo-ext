@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { SubtitleCue, CaptionTrack } from "@/lib/types";
 import { sendMessage } from "@/lib/messages";
 
-export function useSubtitles(videoId: string | null) {
+export function useSubtitles(videoId: string | null, nativeLang: string = "zh-TW") {
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function useSubtitles(videoId: string | null) {
         type: "TRANSLATE",
         texts,
         videoId,
-        lang: "zh-TW",
+        lang: nativeLang,
       });
 
       if (transRes.success) {
@@ -64,7 +64,7 @@ export function useSubtitles(videoId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [videoId]);
+  }, [videoId, nativeLang]);
 
   useEffect(() => {
     loadSubtitles();

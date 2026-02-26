@@ -6,7 +6,7 @@ import { useVideoTime } from "./useVideoTime";
 const translationCache = new Map<string, string>();
 const pendingTranslations = new Set<string>();
 
-async function translateViaBackground(text: string): Promise<void> {
+async function translateViaBackground(text: string, lang: string): Promise<void> {
   if (!text || translationCache.has(text) || pendingTranslations.has(text)) return;
   pendingTranslations.add(text);
   try {
@@ -14,7 +14,7 @@ async function translateViaBackground(text: string): Promise<void> {
       type: "TRANSLATE",
       texts: [text],
       videoId: "",
-      lang: "zh-TW",
+      lang,
     });
     if (res?.success) {
       const [translated] = res.data as string[];
@@ -32,9 +32,21 @@ interface CaptionState {
   translation: string | null;
 }
 
-export function useCaptionMirror(videoId: string) {
-  const { cues } = useSubtitles(videoId);
+export function useCaptionMirror(videoId: string, nativeLang: string = "zh-TW") {
+  const { cues } = useSubtitles(videoId, nativeLang);
   const currentTime = useVideoTime();
+  const langRef = useRef(nativeLang);
+
+  // Keep langRef current so the closed-over interval can use latest lang
+  useEffect(() => {
+    langRef.current = nativeLang;
+  }, [nativeLang]);
+
+  // Clear caches when language changes so translations are re-fetched
+  useEffect(() => {
+    translationCache.clear();
+    pendingTranslations.clear();
+  }, [nativeLang]);
 
   // ── DOM caption: poll YouTube's hidden CC text every 150ms ──
   // Always active — acts as safety net when time-based lookup has no match
@@ -80,7 +92,7 @@ export function useCaptionMirror(videoId: string) {
 
       // Start translation immediately — no extra debounce needed here
       // (display is already debounced by 300ms before showStable is called)
-      translateViaBackground(text).then(() => {
+      translateViaBackground(text, langRef.current).then(() => {
         setDomCaption((prev) => {
           if (prev.text !== text) return prev;
           const t = translationCache.get(text);

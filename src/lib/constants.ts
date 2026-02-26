@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   RECENT_WORDS: "memzo_recent_words",
   SUBTITLE_CACHE_PREFIX: "sub_cache_",
   WORD_STATUSES: "word_statuses",
+  NATIVE_LANG: "memzo_native_lang",
+  TARGET_LANG: "memzo_target_lang",
 } as const;
 
 export const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days

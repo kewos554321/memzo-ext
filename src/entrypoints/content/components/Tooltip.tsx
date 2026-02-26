@@ -9,6 +9,7 @@ interface TooltipProps {
   onStatusChange: (next: WordStatus | null) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  nativeLang?: string;
 }
 
 const POS_ABBR: Record<string, string> = {
@@ -35,10 +36,11 @@ export function Tooltip({
   onStatusChange,
   onMouseEnter,
   onMouseLeave,
+  nativeLang = "zh-TW",
 }: TooltipProps) {
   const [zhMeanings, setZhMeanings] = useState<string[] | null>(null);
 
-  // Translate definitions to Chinese
+  // Translate definitions to native language
   useEffect(() => {
     if (!entry) return;
     const defs = entry.meanings
@@ -47,11 +49,11 @@ export function Tooltip({
       .filter(Boolean) as string[];
     if (!defs.length) return;
 
-    sendMessage({ type: "TRANSLATE", texts: defs, videoId: "", lang: "zh-TW" })
+    sendMessage({ type: "TRANSLATE", texts: defs, videoId: "", lang: nativeLang })
       .then((res) => {
         if (res.success) setZhMeanings(res.data as string[]);
       });
-  }, [entry]);
+  }, [entry, nativeLang]);
 
   function playAudio() {
     if (entry?.audioUrl) {

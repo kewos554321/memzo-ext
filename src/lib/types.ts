@@ -13,6 +13,13 @@ export interface CaptionTrack {
 
 export type WordStatus = "learning" | "mastered";
 
+export type LanguageCode = "zh-TW" | "en";
+
+export const LANGUAGES: { code: LanguageCode; label: string }[] = [
+  { code: "zh-TW", label: "繁體中文" },
+  { code: "en", label: "English" },
+];
+
 export interface DictionaryEntry {
   word: string;
   phonetic?: string;
