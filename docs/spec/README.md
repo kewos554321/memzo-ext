@@ -6,9 +6,9 @@
 
 ## What is Memzo Extension?
 
-Memzo Extension is a Chrome/Firefox browser extension that captures vocabulary words
-from web content (e.g. YouTube subtitles). Captured words are sent to the Memzo web
-app for review and import into study decks.
+Memzo Extension is a Chrome/Firefox browser extension that displays bilingual subtitles
+on YouTube and lets users capture vocabulary words in context. Captured words are sent
+to the Memzo web app inbox for review and import into study decks.
 
 ## Tech Stack
 
@@ -18,35 +18,54 @@ app for review and import into study decks.
 | UI | React 19 |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 4 |
-| Messaging | Chrome Extension Message Passing |
+| Messaging | Chrome Extension Message Passing (MV3) |
 | Build | Vite (via WXT) |
 
 ## Entrypoints
 
 | Path | Role |
 |------|------|
-| `src/entrypoints/background/` | Service worker — message router, API calls |
-| `src/entrypoints/content/` | Content script — subtitle capture, tooltip UI |
-| `src/entrypoints/popup/` | Extension popup — auth, settings |
+| `src/entrypoints/background/index.ts` | Service worker — message router |
+| `src/entrypoints/background/api.ts` | All HTTP calls to memzo-web |
+| `src/entrypoints/background/subtitles.ts` | YouTube caption fetcher |
+| `src/entrypoints/background/translator.ts` | Google Translate (cached) |
+| `src/entrypoints/background/dictionary.ts` | Free Dictionary API (cached) |
+| `src/entrypoints/content/index.tsx` | Content script entry, SPA nav watcher |
+| `src/entrypoints/content/components/` | SubtitleOverlay, WordSpan, Tooltip, ToolbarPill, SettingsPanel, LevelTestDialog |
+| `src/entrypoints/popup/App.tsx` | Extension popup — auth state router |
 
 ## Feature Specs
 
-| File | Feature | Status |
-|------|---------|--------|
-| [01-capture.md](./01-capture.md) | YouTube subtitle word capture | Draft |
-| [02-tooltip.md](./02-tooltip.md) | Word tooltip and save UI | Draft |
-| [03-auth.md](./03-auth.md) | Extension login and token storage | Draft |
-| [04-messaging.md](./04-messaging.md) | Background message routing | Draft |
+| # | File | Feature | Status |
+|---|------|---------|--------|
+| 01 | [01-auth.md](./01-auth.md) | Extension login, JWT storage, logout | ✅ Completed |
+| 02 | [02-subtitle-overlay.md](./02-subtitle-overlay.md) | Bilingual subtitle overlay on YouTube | ✅ Completed |
+| 03 | [03-word-capture.md](./03-word-capture.md) | Word tooltip, dictionary lookup, capture flow | ✅ Completed |
+| 04 | [04-level-system.md](./04-level-system.md) | CEFR/HSK placement test & learning zone | ✅ Completed |
+| 05 | [05-settings.md](./05-settings.md) | Language preferences & server sync | ✅ Completed |
+| 06 | [06-background-messaging.md](./06-background-messaging.md) | Background service worker message router | ✅ Completed |
 
-## Message Protocol
+## Message Protocol Summary
 
-All messages follow the pattern:
+All messages from content/popup → background follow:
 
 ```ts
-// content → background
-browser.runtime.sendMessage({ type: 'MESSAGE_TYPE', payload: { ... } })
+// Send
+browser.runtime.sendMessage({ type: MessageType, ...payload })
 
-// background handles and responds
+// Response envelope
+| { success: true; data: unknown }
+| { success: false; error: string }
 ```
 
-See individual spec files for per-feature message contracts.
+See [06-background-messaging.md](./06-background-messaging.md) for the full message contract table.
+
+## Key Libraries
+
+| Path | Purpose |
+|------|---------|
+| `src/lib/types.ts` | All shared TypeScript interfaces and message types |
+| `src/lib/messages.ts` | `sendMessage()` wrapper |
+| `src/lib/constants.ts` | Storage keys, API URL, cache TTL |
+| `src/lib/difficulty/` | CEFR (English) + HSK (Chinese) word difficulty engines |
+| `src/lib/sources/youtube.ts` | `YoutubeAdapter` — builds `SourceContext` for word capture |
