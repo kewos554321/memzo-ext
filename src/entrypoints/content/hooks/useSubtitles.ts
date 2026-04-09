@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import type { SubtitleCue, CaptionTrack } from "@/lib/types";
 import { sendMessage } from "@/lib/messages";
 
-export function useSubtitles(videoId: string | null, nativeLang: string = "en") {
+export function useSubtitles(
+  videoId: string | null,
+  nativeLang: string = "en",
+  onCuesReady?: (cues: SubtitleCue[]) => void
+) {
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,26 +43,15 @@ export function useSubtitles(videoId: string | null, nativeLang: string = "en") 
       // Merge short cues into sentence-level groups
       const merged = mergeCuesIntoSentences(rawCues);
 
-      // Show English cues immediately — don't block on translation
+      // Show English cues immediately
       setCues(merged);
+      onCuesReady?.(merged);
 
-      // Translate in background; update cues when ready
-      const texts = merged.map((c) => c.text);
-      const transRes = await sendMessage({
-        type: "TRANSLATE",
-        texts,
-        videoId,
-        lang: nativeLang,
-      });
-
-      if (transRes.success) {
-        const translations = transRes.data as string[];
-        merged.forEach((cue, i) => {
-          cue.translation = translations[i];
-        });
-        // Trigger re-render so translations appear
-        setCues([...merged]);
-      }
+      // 新增：字幕加载完立即触发后台翻译
+      // useTranslationWindow会自动启动预加载
+      console.log(
+        `[useSubtitles] Loaded ${merged.length} cues for video ${videoId}, translation will start in background`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load subtitles");
     } finally {

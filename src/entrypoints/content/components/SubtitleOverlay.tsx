@@ -95,7 +95,7 @@ function SubtitleBox({ text, translation, isAuthenticated, decks, selectedDeckId
     <div style={outerStyle}>
       <div style={subtitleStyle}>
         {/* English — hoverable words */}
-        <div style={{ marginBottom: "4px", fontSize: "18px" }}>
+        <div style={{ marginBottom: "12px", fontSize: "17px", fontWeight: 500, lineHeight: 1.5 }}>
           {splitIntoWords(text).map((part, i) =>
             part === " " ? (
               <span key={i}> </span>
@@ -114,8 +114,8 @@ function SubtitleBox({ text, translation, isAuthenticated, decks, selectedDeckId
           )}
         </div>
 
-        {/* Chinese translation — show placeholder while fetching */}
-        <div style={{ fontSize: "16px", color: translation ? "#f9e2af" : "rgba(249,226,175,0.45)" }}>
+        {/* Native language translation — show placeholder while fetching */}
+        <div style={{ fontSize: "15px", fontWeight: 500, color: translation ? "#f9e2af" : "rgba(249,226,175,0.45)", lineHeight: 1.5 }}>
           {translation ?? "翻譯中..."}
         </div>
       </div>
@@ -131,15 +131,17 @@ const outerStyle: React.CSSProperties = {
   zIndex: 2001,
   pointerEvents: "none",
   textAlign: "center",
-  maxWidth: "80%",
+  width: "90%",
+  maxWidth: "900px",
+  boxSizing: "border-box",
 };
 
 const subtitleStyle: React.CSSProperties = {
   background: "rgba(0, 0, 0, 0.75)",
   color: "#fff",
-  padding: "8px 16px",
-  borderRadius: "8px",
-  fontFamily: "'Segoe UI', Arial, sans-serif",
+  padding: "20px 28px",
+  borderRadius: "12px",
+  fontFamily: "'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif",
   lineHeight: "1.6",
   backdropFilter: "blur(4px)",
   pointerEvents: "auto",

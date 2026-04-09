@@ -198,8 +198,8 @@ export function WordSpan({ word, currentSubtitle, isAuthenticated, decks, select
       style={{
         display: "inline-block",
         position: "relative",
-        margin: "2px 1px",
-        padding: "1px 5px",
+        margin: "1px 0",
+        padding: "1px 3px",
         borderRadius: "5px",
         cursor: "pointer",
         fontSize: "inherit",

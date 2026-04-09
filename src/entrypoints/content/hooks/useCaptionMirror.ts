@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { SubtitleCue } from "@/lib/types";
 import { useSubtitles } from "./useSubtitles";
 import { useVideoTime } from "./useVideoTime";
+import { useTranslationWindow } from "./useTranslationWindow";
 
 // Translation cache shared across renders
 const translationCache = new Map<string, string>();
@@ -33,7 +35,8 @@ interface CaptionState {
 }
 
 export function useCaptionMirror(videoId: string, nativeLang: string = "en") {
-  const { cues } = useSubtitles(videoId, nativeLang);
+  const [cues, setCues] = useState<SubtitleCue[]>([]);
+  useSubtitles(videoId, nativeLang, setCues);
   const currentTime = useVideoTime();
   const langRef = useRef(nativeLang);
 
@@ -158,9 +161,11 @@ export function useCaptionMirror(videoId: string, nativeLang: string = "en") {
   );
 
   const [timeCue, setTimeCue] = useState<CaptionState | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!cues.length) {
+      clearTimeout(clearTimerRef.current);
       setTimeCue(null);
       lastCueIndexRef.current = -1;
       return;
@@ -169,22 +174,28 @@ export function useCaptionMirror(videoId: string, nativeLang: string = "en") {
     const idx = findCueIndex(currentTime);
 
     if (idx === -1) {
+      // No matching cue — keep showing the last sentence for up to 2s before clearing
       if (lastCueIndexRef.current !== -1) {
         lastCueIndexRef.current = -1;
-        setTimeCue(null);
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = setTimeout(() => setTimeCue(null), 2000);
       }
       return;
     }
 
     if (idx === lastCueIndexRef.current) return;
+    clearTimeout(clearTimerRef.current);
     lastCueIndexRef.current = idx;
 
     const cue = cues[idx];
     setTimeCue({ text: cue.text, translation: cue.translation ?? null });
   }, [currentTime, findCueIndex, cues]);
 
+  // ── Sliding-window translation driven by playback position ──
+  const currentCueIdx = findCueIndex(currentTime);
+  useTranslationWindow(cues, setCues, currentCueIdx, videoId, langRef.current);
+
   // Prefer sentence-level pre-fetched cue (complete sentence + pre-translated).
-  // Fall back to YouTube CC DOM text when no cue is matched
-  // (before first cue, between sentences, or when subtitle fetch failed).
-  return timeCue ?? domCaption;
+  // Only fall back to DOM caption when cues haven't loaded yet.
+  return cues.length > 0 ? timeCue : domCaption;
 }

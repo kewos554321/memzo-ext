@@ -15,4 +15,5 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-export const TRANSLATE_BATCH_SIZE = 50;
+export const TRANSLATE_BATCH_SIZE = 10; // 更小的批次以加快响应速度
+export const PREFETCH_INTERVAL_MS = 50; // 批次间隔从500ms改到50ms，更激进地持续翻译

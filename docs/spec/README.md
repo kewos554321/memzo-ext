@@ -44,6 +44,8 @@ to the Memzo web app inbox for review and import into study decks.
 | 04 | [04-level-system.md](./04-level-system.md) | CEFR/HSK placement test & learning zone | ✅ Completed |
 | 05 | [05-settings.md](./05-settings.md) | Language preferences & server sync | ✅ Completed |
 | 06 | [06-background-messaging.md](./06-background-messaging.md) | Background service worker message router | ✅ Completed |
+| 07 | [07-progressive-translation.md](./07-progressive-translation.md) | Progressive translation rendering (per-batch setCues) | ✅ Completed |
+| 08 | [08-playback-aware-translation.md](./08-playback-aware-translation.md) | Sliding-window translation driven by playback position | ✅ Completed |
 
 ## Message Protocol Summary
 
