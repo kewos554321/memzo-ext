@@ -79,7 +79,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       <p style={{ textAlign: "center", fontSize: "13px", color: "#0F766E" }}>
         Don't have an account?{" "}
         <a
-          href="http://localhost:3000/register"
+          href="http://localhost:3001/register"
           target="_blank"
           rel="noreferrer"
           style={{ color: "#0D9488", fontWeight: 700, textDecoration: "none" }}

@@ -1,5 +1,5 @@
 export const MEMZO_API_URL =
-  import.meta.env.VITE_MEMZO_API_URL || "http://localhost:3000";
+  import.meta.env.VITE_MEMZO_API_URL || "http://localhost:3001";
 
 export const STORAGE_KEYS = {
   TOKEN: "memzo_token",
